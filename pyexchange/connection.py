@@ -9,7 +9,7 @@ from requests_ntlm import HttpNtlmAuth
 
 import logging
 
-from .exceptions import FailedExchangeException
+from .exceptions import FailedExchangeException, OauthAuthException
 
 log = logging.getLogger('pyexchange')
 
@@ -53,6 +53,88 @@ class ExchangeNTLMAuthConnection(ExchangeBaseConnection):
 
     self.session = requests.Session()
     self.session.auth = self.password_manager
+
+    return self.session
+
+  def send(self, body, headers=None, retries=2, timeout=30, encoding=u"utf-8"):
+    if not self.session:
+      self.session = self.build_session()
+
+    try:
+      response = self.session.post(self.url, data=body, headers=headers)
+      response.raise_for_status()
+    except requests.exceptions.RequestException as err:
+      log.debug(err.response.content)
+      raise FailedExchangeException(u'Unable to connect to Exchange: %s' % err)
+
+    log.info(u'Got response: {code}'.format(code=response.status_code))
+    log.debug(u'Got response headers: {headers}'.format(headers=response.headers))
+    log.debug(u'Got body: {body}'.format(body=response.text))
+
+    return response.text
+
+
+
+class ExchangeRequestsOauth(object):
+  """
+  This is the exchange oauth connection that adds the headers
+  to the requests in order to oauth the requests
+  """
+
+  def __init__(self, access_token):
+    """
+    Inits the connection object
+    :param access_token:  the access token if available
+    """
+    self._access_token = access_token
+
+
+  def __call__(self, r):
+    """
+    It implements the Auth Manager interface from the requests library
+
+    :param r: request object
+    :return: the request object back
+    """
+    if not self._access_token:
+      raise OauthAuthException("Access token not supplied")
+
+    r.headers['Authorization']  = " ".join(["Bearer", self._access_token])
+    return r
+
+
+
+class ExchangeOauthConnection(ExchangeBaseConnection):
+  """ Connection to Exchange that uses OAUTH authentication """
+
+  def __init__(self, url, access_token, **kwargs):
+    self.url = url
+    self._access_token = access_token
+
+    self.handler = None
+    self.session = None
+    self.auth_manager = None
+
+  def build_auth_manager(self):
+    if self.auth_manager:
+      return self.auth_manager
+
+    log.debug(u'Constructing auth manager')
+
+    self.auth_manager = ExchangeRequestsOauth(self._access_token)
+
+    return self.auth_manager
+
+  def build_session(self):
+    if self.session:
+      return self.session
+
+    log.debug(u'Constructing opener')
+
+    self.auth_manager = self.build_auth_manager()
+
+    self.session = requests.Session()
+    self.session.auth = self.auth_manager
 
     return self.session
 

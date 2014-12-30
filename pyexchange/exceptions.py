@@ -42,3 +42,10 @@ class ExchangeInternalServerTransientErrorException(FailedExchangeException):
 class InvalidEventType(Exception):
   """Raised when a method for an event gets called on the wrong type of event."""
   pass
+
+
+class OauthAuthException(Exception):
+  """
+  Raised when there is problem authenticating against oauth endpoint
+  """
+  pass

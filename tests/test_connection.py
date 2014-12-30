@@ -8,7 +8,7 @@ import httpretty
 import unittest
 from mock import patch, MagicMock, call
 from pytest import raises
-from pyexchange.connection import ExchangeNTLMAuthConnection
+from pyexchange.connection import ExchangeNTLMAuthConnection, ExchangeOauthConnection
 from pyexchange.exceptions import *
 
 from .fixtures import *
@@ -82,3 +82,45 @@ def test_session_is_cached():
 
     # assert we only get called once, after that it's cached
     manager.MockSession.assert_called_once_with()
+
+
+def test_oauth_succ():
+    """
+    A succcessfull case where access token is appended
+    """
+
+    httpretty.enable()  # enable HTTPretty so that it will monkey patch the socket module
+
+    httpretty.register_uri(httpretty.POST,
+                           FAKE_EXCHANGE_URL,
+                           status=200,
+                           body="success")
+
+    connection = ExchangeOauthConnection(FAKE_EXCHANGE_URL,
+                                         FAKE_EXCHANGE_ACCESS_TOKEN)
+
+    connection.send("hey")
+
+
+    access_header = " ".join(["Bearer", FAKE_EXCHANGE_ACCESS_TOKEN])
+    assert httpretty.last_request().headers["Authorization"] == access_header
+
+    httpretty.disable()  # disable afterwards, so that you will have no problems in code that uses that socket module
+
+
+@httpretty.activate
+def test_oauth_fail():
+    """
+    A case when the token is missing
+    """
+    httpretty.register_uri(httpretty.POST,
+                       FAKE_EXCHANGE_URL,
+                       status=401,
+                       body="security")
+
+
+    connection = ExchangeOauthConnection(FAKE_EXCHANGE_URL,
+                                         FAKE_EXCHANGE_ACCESS_TOKEN)
+
+    with raises(FailedExchangeException):
+        connection.send("hello")

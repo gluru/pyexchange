@@ -7,3 +7,5 @@ Unless required by applicable law or agreed to in writing, software?distributed 
 FAKE_EXCHANGE_URL = u'http://10.0.0.0/nothing'
 FAKE_EXCHANGE_USERNAME = u'FAKEDOMAIN\\nobody'
 FAKE_EXCHANGE_PASSWORD = u'totallyfake'
+
+FAKE_EXCHANGE_ACCESS_TOKEN = "acess_token"
