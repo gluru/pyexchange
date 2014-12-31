@@ -611,3 +611,71 @@ def update_item(event, updated_attributes, calendar_item_update_operation_type):
       )
 
   return root
+
+
+
+### Email API utility functions will be here
+
+def find_emails(folder_id="inbox", max_per_page=10, offset=0):
+    """
+    Finds the emails in a specififed folder (folder_id)
+    In general the message is like :
+
+    <FindItem Traversal="Shallow">
+      <ItemShape>
+        <t:BaseShape>AllProperties</t:BaseShape>
+      </ItemShape>
+      <ParentFolderIds>
+        <t:DistinguishedFolderId Id="inbox"/>
+      </ParentFolderIds>
+    </FindItem>
+
+    :param folder_id:
+    :param max_per_page:
+    :param offset:
+    :return: the xml object
+    """
+    id = T.DistinguishedFolderId(Id=folder_id) if folder_id in DISTINGUISHED_IDS else T.FolderId(Id=folder_id)
+
+    root = M.FindItem(
+        {u'Traversal': u'Shallow'},
+        M.ItemShape(
+            T.BaseShape("AllProperties")
+        ),
+        M.ParentFolderIds(id)
+    )
+
+    return root
+
+
+
+def get_email(email_id):
+    """
+    Gets an email item back
+
+    <GetItem
+      xmlns="http://schemas.microsoft.com/exchange/services/2006/messages"
+      xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <ItemShape>
+        <t:BaseShape>Default</t:BaseShape>
+        <t:IncludeMimeContent>true</t:IncludeMimeContent>
+      </ItemShape>
+      <ItemIds>
+        <t:ItemId Id="AAAlAF" ChangeKey="CQAAAB" />
+      </ItemIds>
+    </GetItem>
+
+    :param email_id:
+    :return: xml object
+    """
+
+    root = M.GetItem(
+        M.ItemShape(
+            T.BaseShape("Default"),
+            T.IncludeMimeContent("true")
+        ),
+        M.ItemIds(T.ItemId(Id=email_id))
+    )
+
+    return root
+

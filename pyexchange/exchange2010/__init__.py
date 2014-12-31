@@ -9,6 +9,7 @@ import logging
 from ..base.calendar import BaseExchangeCalendarEvent, BaseExchangeCalendarService, ExchangeEventOrganizer, ExchangeEventResponse
 from ..base.folder import BaseExchangeFolder, BaseExchangeFolderService
 from ..base.soap import ExchangeServiceSOAP
+from ..base.email import BaseExchangeEmailItem, BaseExchangeEmailService
 from ..exceptions import FailedExchangeException, ExchangeStaleChangeKeyException, ExchangeItemNotFoundException, ExchangeInternalServerTransientErrorException, ExchangeIrresolvableConflictException, InvalidEventType
 
 from . import soap_request
@@ -26,8 +27,8 @@ class Exchange2010Service(ExchangeServiceSOAP):
   def calendar(self, id="calendar"):
     return Exchange2010CalendarService(service=self, calendar_id=id)
 
-  def mail(self):
-    raise NotImplementedError("Sorry - nothin' here. Feel like adding it? :)")
+  def mail(self, folder_id="inbox"):
+    return Exchange2010EmailService(service=self, folder_id=folder_id)
 
   def contacts(self):
     raise NotImplementedError("Sorry - nothin' here. Feel like adding it? :)")
@@ -77,6 +78,32 @@ class Exchange2010Service(ExchangeServiceSOAP):
         pass
       elif code.text != u"NoError":
         raise FailedExchangeException(u"Exchange Fault (%s) from Exchange server" % code.text)
+
+
+class Exchange2010EmailService(BaseExchangeEmailService):
+  """
+  The service implementation for email handling
+  """
+
+  def get_email(self, email_id):
+
+    body = soap_request.get_email(email_id)
+    response_xml = self.service.send(body)
+
+    return response_xml
+
+
+  def list_emails(self):
+    """
+    Lists the emails from the specified folder
+    """
+
+    body = soap_request.find_emails(self.folder_id)
+    response_xml = self.service.send(body)
+
+    return response_xml
+
+
 
 
 class Exchange2010CalendarService(BaseExchangeCalendarService):
