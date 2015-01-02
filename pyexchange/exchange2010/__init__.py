@@ -9,7 +9,7 @@ import logging
 from ..base.calendar import BaseExchangeCalendarEvent, BaseExchangeCalendarService, ExchangeEventOrganizer, ExchangeEventResponse
 from ..base.folder import BaseExchangeFolder, BaseExchangeFolderService
 from ..base.soap import ExchangeServiceSOAP
-from ..base.email import BaseExchangeEmailItem, BaseExchangeEmailService
+from ..base.email import BaseExchangeEmailItem, BaseExchangeEmailService, BaseExchangeAttachmentItem
 from ..exceptions import FailedExchangeException, ExchangeStaleChangeKeyException, ExchangeItemNotFoundException, ExchangeInternalServerTransientErrorException, ExchangeIrresolvableConflictException, InvalidEventType
 
 from . import soap_request
@@ -90,6 +90,15 @@ class Exchange2010EmailService(BaseExchangeEmailService):
     Gets an exchange email item back
     """
     return Exchange2010EmailItem(self.service, id=email_id)
+
+
+  def get_attachment(self, attachment_id):
+    """
+    This method does an api call and pulls the attachment body not only the meta
+    """
+    return Exchange2010AttachmentItem(self.service, id=attachment_id)
+
+
 
   def list_emails(self):
     """
@@ -238,6 +247,10 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
     cc_dict = self._parse_email_cc_recipients(xml_resp)
     result["cc_recipients"] = cc_dict
 
+    if result.get("has_attachments"):
+      attachments = self._parse_email_attachments(xml_resp)
+      result["attachment_ids"] = attachments
+
     return result
 
 
@@ -307,6 +320,121 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
       result.append(tmp_recipient)
 
     return result
+
+  def _parse_email_attachments(self, xml_resp):
+    """
+    Only interested in attachment ids
+    <t:Attachments>
+      <t:FileAttachment>
+        <t:AttachmentId Id="some_id"/>
+        <t:Name>attach_name</t:Name>
+        <t:ContentType>application/octet-stream</t:ContentType>
+        <t:ContentId>content_id</t:ContentId>
+      </t:FileAttachment>
+    </t:Attachments>
+    """
+    xml_path = u'//m:Items/t:Message/t:Attachments/t:FileAttachment/t:AttachmentId'
+    ids = xml_resp.xpath(xml_path, namespaces=soap_request.NAMESPACES)
+
+    result_ids = []
+    for i in ids:
+      tmp_i = i.get("Id")
+      if tmp_i:
+        result_ids.append(tmp_i)
+
+    return result_ids
+
+
+class Exchange2010AttachmentItem(BaseExchangeAttachmentItem):
+  """
+  The implementation of the ExchangeEmailItem
+  """
+
+  def _init_from_service(self, id):
+    log.debug(u'Creating new Exchange2010AttachmentItem object from ID')
+    body = soap_request.get_attachment(id)
+    response_xml = self.service.send(body)
+    properties = self._parse_response_for_get_attachment(response_xml)
+
+    self.update_properties(properties)
+    self._id = id
+    log.debug(u'Created new event object with ID: %s' % self._id)
+
+    return self
+
+
+  def _init_from_xml(self, xml=None):
+    log.debug(u'Creating new Exchange2010EmailItem object from XML')
+
+    properties = self._parse_response_for_get_attachment(xml)
+    self.update_properties(properties)
+    self._id = self._parse_id_and_change_key_from_response(xml)
+
+    log.debug(u'Created new email object with ID: %s' % self._id)
+
+    return self
+
+
+  def _parse_id_and_change_key_from_response(self, response):
+    """
+    Gets the id of the message and the change_key
+
+    :param response: the xml reponse
+    :return:
+    """
+    id_elements = response.xpath(u'//m:Attachments/t:FileAttachment/t:AttachmentId', namespaces=soap_request.NAMESPACES)
+
+    if id_elements:
+      id_element = id_elements[0]
+      return id_element.get(u"Id", None)
+
+    return None
+
+
+
+  def _parse_response_for_get_attachment(self, xml_resp):
+    """
+    Parses the attachment response back
+
+    <m:GetAttachmentResponse xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <m:ResponseMessages>
+        <m:GetAttachmentResponseMessage ResponseClass="Success">
+          <m:ResponseCode>NoError</m:ResponseCode>
+          <m:Attachments>
+            <t:FileAttachment>
+              <t:AttachmentId Id="the_id"/>
+              <t:Name>messages.xsd</t:Name>
+              <t:ContentType>application/octet-stream</t:ContentType>
+              <t:ContentId>content_id</t:ContentId>
+              <t:Content>
+                The content of the attachment
+              </t:Content>
+            </t:FileAttachment>
+          </m:Attachments>
+        </m:GetAttachmentResponseMessage>
+      </m:ResponseMessages>
+    </m:GetAttachmentResponse>
+    """
+    property_map = {
+      "name":{
+        "xpath": u'//m:Attachments/t:FileAttachment/t:Name'
+      },
+      "content_type":{
+        "xpath": u'//m:Attachments/t:FileAttachment/t:ContentType'
+      },
+      "content_id":{
+        "xpath": u'//m:Attachments/t:FileAttachment/t:ContentId'
+      },
+      "content":{
+        "xpath": u'//m:Attachments/t:FileAttachment/t:Content'
+      }
+    }
+
+    result = self.service._xpath_to_dict(element=xml_resp, property_map=property_map, namespace_map=soap_request.NAMESPACES)
+
+    return result
+
+
 
 
 class Exchange2010CalendarService(BaseExchangeCalendarService):

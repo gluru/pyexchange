@@ -678,3 +678,26 @@ def get_email(email_id):
 
     return root
 
+def get_attachment(attachment_id):
+    """
+    Prepares an api request for GetAttachment api call
+
+    <GetAttachment xmlns="http://schemas.microsoft.com/exchange/services/2006/messages"
+    xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <AttachmentShape/>
+      <AttachmentIds>
+        <t:AttachmentId Id="AAAtAEFkbWluaX..."/>
+      </AttachmentIds>
+    </GetAttachment>
+
+    :param attachment_id: the Exchange attachment id
+    :return: xml object
+    """
+    root = M.GetAttachment(
+        M.AttachmentShape(),
+        M.AttachmentIds(
+            T.AttachmentId(Id=attachment_id)
+        )
+    )
+
+    return root

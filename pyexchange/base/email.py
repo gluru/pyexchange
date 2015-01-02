@@ -100,6 +100,9 @@ class BaseExchangeEmailItem(DataSerializerMixin, UpdatePropsMixin):
     created_time = None
     has_attachments = False
     is_read = False
+    #These will keep only the ids do not keep the whole attachment
+    #To get the attachment you need a second api call !!!
+    attachment_ids = None
 
     #Those need some special handling and are exposed via public fn
     _sender = None
@@ -109,7 +112,7 @@ class BaseExchangeEmailItem(DataSerializerMixin, UpdatePropsMixin):
     DATA_ATTRIBUTES = [
         "subject", "body_html", "size", "sent_time",
         "created_time", "has_attachments","is_read", "sender", "recipients",
-        "cc_recipients"]
+        "cc_recipients", "attachment_ids"]
 
 
     def __init__(self, service, id=None, folder_id=u'inbox', xml=None, **kwargs):
@@ -179,6 +182,60 @@ class BaseExchangeEmailItem(DataSerializerMixin, UpdatePropsMixin):
             result.append(r)
 
         return result
+
+    @property
+    def id(self):
+        """ **Read-only.** The internal id Exchange uses to refer to this event. """
+        return self._id
+
+
+
+class BaseExchangeAttachmentItem(DataSerializerMixin, UpdatePropsMixin):
+    """
+    The base of the message itself
+    """
+    _id = None #It is the exchange identifier
+
+    service = None
+
+    #Fields in the attachment object
+    name = u''
+    content_type = u''
+    content_id = u''
+    content = None
+
+    DATA_ATTRIBUTES = [
+        "id", "name", "content_type", "content_id"
+    ]
+
+    def __init__(self, service, id=None, xml=None, **kwargs):
+        """
+        :param service:
+        :param id:
+        :param folder_id:
+        :param xml:
+        :param kwargs:
+        :return:
+        """
+        self.service = service
+
+        if xml is not None:
+            self._init_from_xml(xml)
+        elif id is None:
+            self.update_properties(kwargs)
+        else:
+            self._init_from_service(id)
+
+
+    def _init_from_service(self, id):
+        """ Connect to the Exchange service and grab all the properties out of it. """
+        raise NotImplementedError
+
+
+    def _init_from_xml(self, xml):
+        """ Using already retrieved XML from Exchange, extract properties out of it. """
+        raise NotImplementedError
+
 
     @property
     def id(self):
