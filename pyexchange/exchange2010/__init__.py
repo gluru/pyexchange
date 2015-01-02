@@ -86,12 +86,10 @@ class Exchange2010EmailService(BaseExchangeEmailService):
   """
 
   def get_email(self, email_id):
-
-    body = soap_request.get_email(email_id)
-    response_xml = self.service.send(body)
-
-    return response_xml
-
+    """
+    Gets an exchange email item back
+    """
+    return Exchange2010EmailItem(self.service, id=email_id)
 
   def list_emails(self):
     """
@@ -104,6 +102,211 @@ class Exchange2010EmailService(BaseExchangeEmailService):
     return response_xml
 
 
+
+class Exchange2010EmailItem(BaseExchangeEmailItem):
+  """
+  The implementation of the ExchangeEmailItem
+  """
+
+  def _init_from_service(self, id):
+    log.debug(u'Creating new Exchange2010EmailItem object from ID')
+    body = soap_request.get_email(id)
+    response_xml = self.service.send(body)
+    properties = self._parse_response_for_get_email(response_xml)
+
+    self.update_properties(properties)
+    self._id = id
+    log.debug(u'Created new event object with ID: %s' % self._id)
+
+    return self
+
+
+  def _init_from_xml(self, xml=None):
+    log.debug(u'Creating new Exchange2010EmailItem object from XML')
+
+    properties = self._parse_response_for_get_email(xml)
+    self.update_properties(properties)
+    self._id, self._change_key = self._parse_id_and_change_key_from_response(xml)
+
+    log.debug(u'Created new email object with ID: %s' % self._id)
+
+    return self
+
+
+  def _parse_id_and_change_key_from_response(self, response):
+    """
+    Gets the id of the message and the change_key
+
+    :param response: the xml reponse
+    :return:
+    """
+    id_elements = response.xpath(u'//m:Items/t:Message/t:ItemId', namespaces=soap_request.NAMESPACES)
+
+    if id_elements:
+      id_element = id_elements[0]
+      return id_element.get(u"Id", None), id_element.get(u"ChangeKey", None)
+    else:
+      return None, None
+
+
+
+  def _parse_response_for_get_email(self, xml_resp):
+    """
+    Parses the soap email message and pulls the fields we need
+    The default message format is something like this :
+    <m:GetItemResponse xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <m:ResponseMessages>
+        <m:GetItemResponseMessage ResponseClass="Success">
+          <m:ResponseCode>NoError</m:ResponseCode>
+          <m:Items>
+            <t:Message>
+              <t:ItemId Id="some-id"/>
+              <t:Subject>Test From Denis</t:Subject>
+              <t:Sensitivity>Normal</t:Sensitivity>
+              <t:Body BodyType="HTML">BodyMsg</t:Body>
+              <t:Size>15706</t:Size>
+              <t:DateTimeSent>2014-12-23T12:51:13Z</t:DateTimeSent>
+              <t:DateTimeCreated>2014-12-23T12:51:15Z</t:DateTimeCreated>
+              <t:ResponseObjects>
+                <t:ReplyToItem/>
+                <t:ReplyAllToItem/>
+                <t:ForwardItem/>
+              </t:ResponseObjects>
+              <t:HasAttachments>false</t:HasAttachments>
+              <t:ToRecipients>
+                <t:Mailbox>
+                  <t:Name>Recipent1</t:Name>
+                  <t:EmailAddress>recipent@example.com</t:EmailAddress>
+                  <t:RoutingType>SMTP</t:RoutingType>
+                </t:Mailbox>
+              </t:ToRecipients>
+              <t:IsReadReceiptRequested>false</t:IsReadReceiptRequested>
+              <t:From>
+                <t:Mailbox>
+                  <t:Name>Sender</t:Name>
+                  <t:EmailAddress>email@example.com</t:EmailAddress>
+                  <t:RoutingType>SMTP</t:RoutingType>
+                </t:Mailbox>
+              </t:From>
+              <t:IsRead>true</t:IsRead>
+            </t:Message>
+          </m:Items>
+        </m:GetItemResponseMessage>
+      </m:ResponseMessages>
+    </m:GetItemResponse>
+    """
+    property_map = {
+      "subject":{
+        "xpath": u'//m:Items/t:Message/t:Subject'
+      },
+      "body_html":{
+        "xpath": u'//m:Items/t:Message/t:Body[@BodyType="HTML"]'
+      },
+      "size":{
+        "xpath": u'//m:Items/t:Message/t:Size',
+        "cast":u"int"
+      },
+      "sent_time":{
+        "xpath": u'//m:Items/t:Message/t:DateTimeSent',
+        "cast":u"datetime"
+      },
+      "created_time":{
+        "xpath": u'//m:Items/t:Message/t:DateTimeCreated',
+        "cast":u"datetime"
+      },
+      "has_attachments":{
+        "xpath": u'//m:Items/t:Message/t:HasAttachments',
+        "cast":u"bool"
+      },
+      "is_read":{
+        "xpath": u'//m:Items/t:Message/t:IsRead',
+        "cast":u"bool"
+      }
+    }
+
+    result = self.service._xpath_to_dict(element=xml_resp, property_map=property_map, namespace_map=soap_request.NAMESPACES)
+
+    #extract the sender from the xpath
+    sender_dict = self._parse_email_sender(xml_resp)
+    result["sender"] = sender_dict
+
+    #extract the recipients from the message
+    recipients_dict = self._parse_email_recipients(xml_resp)
+    result["recipients"] = recipients_dict
+
+    #Extract the cc list from it
+    cc_dict = self._parse_email_cc_recipients(xml_resp)
+    result["cc_recipients"] = cc_dict
+
+    return result
+
+
+  def _parse_mailbox_item(self, xml_resp):
+    """
+    Parses a mailbox item which is in the following format
+
+    <t:Mailbox>
+      <t:Name>Name Here</t:Name>
+      <t:EmailAddress>EmailHere</t:EmailAddress>
+      <t:RoutingType>SMTP</t:RoutingType>
+    </t:Mailbox>
+    """
+    property_map = {
+      u'name':
+      {
+        u'xpath': u't:Name'
+      },
+      u'email':
+      {
+        u'xpath': u't:EmailAddress'
+      },
+      u'routing_type':
+      {
+        u'xpath': u't:ResponseType'
+      }
+    }
+
+    result = self.service._xpath_to_dict(element=xml_resp, property_map=property_map, namespace_map=soap_request.NAMESPACES)
+    return result
+
+
+  def _parse_email_sender(self, xml_resp):
+    """
+    Parses the email sender and gets back a dict of the fields
+    """
+    from_part = xml_resp.xpath(u'//m:Items/t:Message/t:From/t:Mailbox', namespaces=soap_request.NAMESPACES)
+    return self._parse_mailbox_item(from_part[0])
+
+
+  def _parse_email_recipients(self, xml_resp):
+    """
+    Parses the recipients the email was sent to
+    """
+    recipient_path = u'//m:Items/t:Message/t:ToRecipients/t:Mailbox'
+    return self._parse_email_mailboxes(xml_resp, recipient_path)
+
+
+  def _parse_email_cc_recipients(self, xml_resp):
+    """
+    Parses the cc parts of the message
+    """
+    recipient_path = u'//m:Items/t:Message/t:CcRecipients/t:Mailbox'
+    return self._parse_email_mailboxes(xml_resp, recipient_path)
+
+
+
+  def _parse_email_mailboxes(self, xml_resp, xml_path):
+    """
+    A more generic version of parsing the mailboxes
+    """
+    result = []
+    mailbox_parts = xml_resp.xpath(xml_path, namespaces=soap_request.NAMESPACES)
+
+    for mailbox in mailbox_parts:
+      tmp_recipient = self._parse_mailbox_item(mailbox)
+      result.append(tmp_recipient)
+
+    return result
 
 
 class Exchange2010CalendarService(BaseExchangeCalendarService):

@@ -671,8 +671,7 @@ def get_email(email_id):
 
     root = M.GetItem(
         M.ItemShape(
-            T.BaseShape("Default"),
-            T.IncludeMimeContent("true")
+            T.BaseShape("Default")
         ),
         M.ItemIds(T.ItemId(Id=email_id))
     )
