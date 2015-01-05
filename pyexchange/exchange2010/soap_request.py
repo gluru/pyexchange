@@ -635,6 +635,13 @@ def find_emails(folder_id="inbox", max_per_page=10, offset=0):
     :param offset:
     :return: the xml object
     """
+
+    limit_node = M.IndexedPageItemView(
+        MaxEntriesReturned=str(max_per_page),
+        Offset=str(offset),
+        BasePoint="Beginning"
+    )
+
     id = T.DistinguishedFolderId(Id=folder_id) if folder_id in DISTINGUISHED_IDS else T.FolderId(Id=folder_id)
 
     root = M.FindItem(
@@ -642,6 +649,7 @@ def find_emails(folder_id="inbox", max_per_page=10, offset=0):
         M.ItemShape(
             T.BaseShape("AllProperties")
         ),
+        limit_node,
         M.ParentFolderIds(id)
     )
 

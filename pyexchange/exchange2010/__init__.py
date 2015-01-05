@@ -100,16 +100,14 @@ class Exchange2010EmailService(BaseExchangeEmailService):
 
 
 
-  def list_emails(self):
+  def list_emails(self, per_page=10, offset=0, folder_id="inbox"):
     """
     Lists the emails from the specified folder
     """
-
-    body = soap_request.find_emails(self.folder_id)
-    response_xml = self.service.send(body)
-
-    return response_xml
-
+    return Exchange2010EmailList(self.service,
+                                folder_id=self.folder_id,
+                                max_entries=per_page,
+                                offset=offset)
 
 
 class Exchange2010EmailItem(BaseExchangeEmailItem):
@@ -345,6 +343,73 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
     return result_ids
 
 
+class Exchange2010EmailList(object):
+  """
+  Creates and stores a list of Exchange2010EmailItem in the self.emails field
+  """
+
+  def __init__(self, service=None, max_entries=10, offset=0, folder_id="inbox"):
+
+    self.service = service
+    self.count = 0
+    self.emails = []
+    self.email_ids = []
+
+    self.max_entries = max_entries
+    self.offset = offset
+    self.folder_id = folder_id
+
+    body = soap_request.find_emails(folder_id=folder_id,
+                                    max_per_page=self.max_entries,
+                                    offset=self.offset)
+
+    response_xml = self.service.send(body)
+    #Loads the emails from the api
+    self._parse_response_for_all_emails(response_xml)
+
+
+  def _parse_response_for_all_emails(self, xml_resp):
+    """
+    Parses the response from find item
+
+    <m:FindItemResponse xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages" xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <m:ResponseMessages>
+        <m:FindItemResponseMessage ResponseClass="Success">
+          <m:ResponseCode>NoError</m:ResponseCode>
+          <m:RootFolder IndexedPagingOffset="7" TotalItemsInView="7" IncludesLastItemInRange="true">
+            <t:Items>
+              <t:Message>
+              </t:Message>
+
+    """
+    items = xml_resp.xpath(u'//m:FindItemResponseMessage/m:RootFolder/t:Items/t:Message/t:ItemId', namespaces=soap_request.NAMESPACES)
+    if not items:
+      print "No items here : ",items
+
+      #There is no need tog o further on this
+      return self
+    else:
+      log.debug(u'No email items found with search parameters.')
+
+    self.count = len(items)
+    log.debug(u'Found %s items' % self.count)
+
+    for item in items:
+      item_id = item.get("Id", None)
+      self.email_ids.append(item_id)
+      self._add_email(item_id)
+
+    return self
+
+
+  def _add_email(self, item_id):
+    """
+    Adds an email by making a remote request
+    """
+    email_item = Exchange2010EmailItem(self.service, id=item_id)
+    self.emails.append(email_item)
+
+
 class Exchange2010AttachmentItem(BaseExchangeAttachmentItem):
   """
   The implementation of the ExchangeEmailItem
@@ -479,7 +544,6 @@ class Exchange2010CalendarEventList(object):
     if self.details:
       log.debug(u'Received request for all details, retrieving now!')
       self.load_all_details()
-    return
 
   def _parse_response_for_all_events(self, response):
     """
