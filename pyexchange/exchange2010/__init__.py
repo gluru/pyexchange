@@ -110,6 +110,15 @@ class Exchange2010EmailService(BaseExchangeEmailService):
                                 offset=offset)
 
 
+  def get_inbox(self):
+    """
+    Getting the inbox_rules back
+    """
+    body = soap_request.get_folder(folder_id="inbox", format=u'IdOnly')
+    response_xml = self.service.send(body)
+    return response_xml
+
+
 class Exchange2010EmailItem(BaseExchangeEmailItem):
   """
   The implementation of the ExchangeEmailItem
