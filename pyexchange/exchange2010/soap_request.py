@@ -702,10 +702,30 @@ def get_attachment(attachment_id):
     :return: xml object
     """
     root = M.GetAttachment(
-        M.AttachmentShape(),
+        M.AttachmentShape(
+            T.IncludeMimeContent("true"),
+        ),
         M.AttachmentIds(
             T.AttachmentId(Id=attachment_id)
         )
     )
 
     return root
+
+
+
+def get_inbox_rules(mail_addr=None):
+    """
+    A simple request to get the inbox rules
+    :param: mail_add is optional in this case
+    :return: the xml_object
+    <m:GetInboxRules>
+      <m:MailboxSmtpAddress>User1@Contoso.com</m:MailboxSmtpAddress>
+    </m:GetInboxRules>
+    """
+    M = ElementMaker()
+    if mail_addr:
+        return M.GetInboxRules(
+            M.MailboxSmtpAddress(mail_addr)
+        )
+    return M.GetInboxRules()

@@ -98,11 +98,12 @@ class BaseExchangeEmailItem(DataSerializerMixin, UpdatePropsMixin):
     size = 0
     sent_time = None
     created_time = None
+    received_time = None
     has_attachments = False
     is_read = False
     #These will keep only the ids do not keep the whole attachment
     #To get the attachment you need a second api call !!!
-    attachment_ids = None
+    attachments = None
 
     #Those need some special handling and are exposed via public fn
     _sender = None
@@ -110,9 +111,9 @@ class BaseExchangeEmailItem(DataSerializerMixin, UpdatePropsMixin):
     _cc_recipients = []
 
     DATA_ATTRIBUTES = [
-        "subject", "body_html", "size", "sent_time",
+        "subject", "body_html", "size", "sent_time", "received_time",
         "created_time", "has_attachments","is_read", "sender", "recipients",
-        "cc_recipients", "attachment_ids"]
+        "cc_recipients", "attachments"]
 
 
     def __init__(self, service, id=None, folder_id=u'inbox', xml=None, **kwargs):

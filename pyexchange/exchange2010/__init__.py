@@ -183,6 +183,7 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
               <t:Size>15706</t:Size>
               <t:DateTimeSent>2014-12-23T12:51:13Z</t:DateTimeSent>
               <t:DateTimeCreated>2014-12-23T12:51:15Z</t:DateTimeCreated>
+              <t:DateTimeReceived>2014-12-23T12:51:15Z</t:DateTimeReceived>
               <t:ResponseObjects>
                 <t:ReplyToItem/>
                 <t:ReplyAllToItem/>
@@ -230,6 +231,10 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
         "xpath": u'//m:Items/t:Message/t:DateTimeCreated',
         "cast":u"datetime"
       },
+      "received_time":{
+        "xpath": u'//m:Items/t:Message/t:DateTimeReceived',
+        "cast":u"datetime"
+      },
       "has_attachments":{
         "xpath": u'//m:Items/t:Message/t:HasAttachments',
         "cast":u"bool"
@@ -256,7 +261,7 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
 
     if result.get("has_attachments"):
       attachments = self._parse_email_attachments(xml_resp)
-      result["attachment_ids"] = attachments
+      result["attachments"] = attachments
 
     return result
 
@@ -340,29 +345,63 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
       </t:FileAttachment>
     </t:Attachments>
     """
-    xml_path = u'//m:Items/t:Message/t:Attachments/t:FileAttachment/t:AttachmentId'
-    ids = xml_resp.xpath(xml_path, namespaces=soap_request.NAMESPACES)
+    property_map = {
+      u'name':
+      {
+        u'xpath': u't:Name'
+      },
+      u'content_type':
+      {
+        u'xpath': u't:ContentType'
+      }
+    }
 
-    result_ids = []
-    for i in ids:
-      tmp_i = i.get("Id")
-      if tmp_i:
-        result_ids.append(tmp_i)
+    xml_path = u'//m:Items/t:Message/t:Attachments/t:FileAttachment'
+    attachments = xml_resp.xpath(xml_path, namespaces=soap_request.NAMESPACES)
 
-    return result_ids
 
+    if not attachments:
+      return []
+
+    results = []
+    for attach in attachments:
+      result = self.service._xpath_to_dict(element=attach,
+                                           property_map=property_map,
+                                           namespace_map=soap_request.NAMESPACES)
+
+      attach_id_obj = attach.xpath(u't:AttachmentId', namespaces=soap_request.NAMESPACES)
+      if not attach_id_obj:
+        continue
+
+      result["attachment_id"] = attach_id_obj[0].get("Id", None)
+      results.append(result)
+
+    return results
+
+
+EMAIL_ITEM_DETAIL_ALL = "all"
+EMAIL_ITEM_DETAIL_IDS = "ids"
 
 class Exchange2010EmailList(object):
   """
   Creates and stores a list of Exchange2010EmailItem in the self.emails field
   """
 
-  def __init__(self, service=None, max_entries=10, offset=0, folder_id="inbox"):
+  def __init__(self, service=None, max_entries=10, offset=0, folder_id="inbox", detail=EMAIL_ITEM_DETAIL_ALL):
+    """
+    :param service:
+    :param max_entries:
+    :param offset:
+    :param folder_id:
+    :param detail: It can be all|ids depending how much data we should fetch
 
+    :return:
+    """
     self.service = service
     self.count = 0
     self.emails = []
     self.email_ids = []
+    self.detail = detail
 
     self.max_entries = max_entries
     self.offset = offset
@@ -391,32 +430,45 @@ class Exchange2010EmailList(object):
               </t:Message>
 
     """
-    items = xml_resp.xpath(u'//m:FindItemResponseMessage/m:RootFolder/t:Items/t:Message/t:ItemId', namespaces=soap_request.NAMESPACES)
-    if not items:
-      print "No items here : ",items
+    if self.detail == EMAIL_ITEM_DETAIL_IDS:
+      items = xml_resp.xpath(u'//m:FindItemResponseMessage/m:RootFolder/t:Items/t:Message/t:ItemId', namespaces=soap_request.NAMESPACES)
+    else:
+      items = xml_resp.xpath(u'//m:FindItemResponseMessage/m:RootFolder/t:Items/t:Message', namespaces=soap_request.NAMESPACES)
 
+    if not items:
+      log.debug(u'No email items found with search parameters.')
       #There is no need tog o further on this
       return self
-    else:
-      log.debug(u'No email items found with search parameters.')
 
     self.count = len(items)
     log.debug(u'Found %s items' % self.count)
 
     for item in items:
-      item_id = item.get("Id", None)
-      self.email_ids.append(item_id)
-      self._add_email(item_id)
+      if self.detail == EMAIL_ITEM_DETAIL_IDS:
+        item_id = item.get("Id", None)
+        self.email_ids.append(item_id)
+        self._add_email_from_id(item_id)
+      else:
+        self._add_email_from_xml(soap_request.M.Items(deepcopy(item)))
 
     return self
 
 
-  def _add_email(self, item_id):
+  def _add_email_from_id(self, item_id):
     """
     Adds an email by making a remote request
     """
     email_item = Exchange2010EmailItem(self.service, id=item_id)
     self.emails.append(email_item)
+
+
+  def _add_email_from_xml(self, xml_resp):
+    """
+    You don't make another call just create one email item from xml request
+    """
+    email_item = Exchange2010EmailItem(self.service, xml=xml_resp)
+    self.emails.append(email_item)
+    self.email_ids.append(email_item.id)
 
 
 class Exchange2010AttachmentItem(BaseExchangeAttachmentItem):
