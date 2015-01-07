@@ -616,7 +616,7 @@ def update_item(event, updated_attributes, calendar_item_update_operation_type):
 
 ### Email API utility functions will be here
 
-def find_emails(folder_id="inbox", max_per_page=10, offset=0):
+def find_emails(folder_id="inbox", max_per_page=10, offset=0, detail="all"):
     """
     Finds the emails in a specififed folder (folder_id)
     In general the message is like :
@@ -635,6 +635,10 @@ def find_emails(folder_id="inbox", max_per_page=10, offset=0):
     :param offset:
     :return: the xml object
     """
+    shape = "AllProperties"
+    if detail != "all":
+        shape = "IdOnly"
+
 
     limit_node = M.IndexedPageItemView(
         MaxEntriesReturned=str(max_per_page),
@@ -647,7 +651,7 @@ def find_emails(folder_id="inbox", max_per_page=10, offset=0):
     root = M.FindItem(
         {u'Traversal': u'Shallow'},
         M.ItemShape(
-            T.BaseShape("AllProperties")
+            T.BaseShape(shape)
         ),
         limit_node,
         M.ParentFolderIds(id)

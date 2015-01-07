@@ -180,7 +180,7 @@ class BaseExchangeEmailItem(DataSerializerMixin, UpdatePropsMixin):
         result = []
         for r in recipient_lst:
             t = ExchangeMailBoxItem(**r)
-            result.append(r)
+            result.append(t)
 
         return result
 

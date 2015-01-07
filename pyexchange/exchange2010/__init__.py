@@ -21,6 +21,9 @@ import warnings
 
 log = logging.getLogger("pyexchange")
 
+EMAIL_ITEM_DETAIL_ALL = "all"
+EMAIL_ITEM_DETAIL_IDS = "ids"
+
 
 class Exchange2010Service(ExchangeServiceSOAP):
 
@@ -100,14 +103,15 @@ class Exchange2010EmailService(BaseExchangeEmailService):
 
 
 
-  def list_emails(self, per_page=10, offset=0, folder_id="inbox"):
+  def list_emails(self, per_page=10, offset=0, folder_id="inbox", detail=EMAIL_ITEM_DETAIL_ALL):
     """
     Lists the emails from the specified folder
     """
     return Exchange2010EmailList(self.service,
                                 folder_id=self.folder_id,
                                 max_entries=per_page,
-                                offset=offset)
+                                offset=offset,
+                                detail=detail)
 
 
   def get_inbox(self):
@@ -132,7 +136,7 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
 
     self.update_properties(properties)
     self._id = id
-    log.debug(u'Created new event object with ID: %s' % self._id)
+    log.debug(u'Created new email object with ID: %s' % self._id)
 
     return self
 
@@ -379,8 +383,6 @@ class Exchange2010EmailItem(BaseExchangeEmailItem):
     return results
 
 
-EMAIL_ITEM_DETAIL_ALL = "all"
-EMAIL_ITEM_DETAIL_IDS = "ids"
 
 class Exchange2010EmailList(object):
   """
@@ -409,7 +411,8 @@ class Exchange2010EmailList(object):
 
     body = soap_request.find_emails(folder_id=folder_id,
                                     max_per_page=self.max_entries,
-                                    offset=self.offset)
+                                    offset=self.offset,
+                                    detail=detail)
 
     response_xml = self.service.send(body)
     #Loads the emails from the api
