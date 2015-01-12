@@ -43,7 +43,7 @@ class ExchangeServiceSOAP(object):
 
     self._check_for_errors(tree)
 
-    log.info(etree.tostring(tree, encoding=encoding, pretty_print=True))
+    #log.info(etree.tostring(tree, encoding=encoding, pretty_print=True))
     return tree
 
   def _check_for_errors(self, xml_tree):
